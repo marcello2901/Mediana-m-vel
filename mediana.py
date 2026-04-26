@@ -80,8 +80,8 @@ with st.sidebar:
     st.divider()
     
     # Cálculo das Opções de Meta
-    op1 = (0.5 * cvi) * 100
-    op2 = (0.25 * cvi) * 100
+    op1 = (0.75 * cvi) * 100
+    op2 = (0.5 * cvi) * 100
     op5 = 0.25 * np.sqrt(cvi**2 + cvg**2) * 100
     op6 = 0.375 * np.sqrt(cvi**2 + cvg**2) * 100
     rcv = 2.77 * np.sqrt(cva**2 + cvi**2)
