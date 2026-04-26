@@ -2,9 +2,10 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 from scipy import stats
+import plotly.graph_objects as go
 
 # Configuração de performance e layout
-st.set_page_config(page_title="Medida Móvel - High Performance", layout="wide")
+st.set_page_config(page_title="Medida Móvel - Alta Performance", layout="wide")
 
 # --- FUNÇÕES DE CÁLCULO COM CACHE ---
 
@@ -26,9 +27,10 @@ def processar_dados_robustos(df_raw, col_res, col_data, col_hora, n_janela):
     q1 = df[col_res].quantile(0.25)
     q3 = df[col_res].quantile(0.75)
     iqr = q3 - q1
+    mediana_geral = df[col_res].median()
     df['res_limpo'] = df[col_res].mask(
         (df[col_res] < (q1 - 1.5 * iqr)) | (df[col_res] > (q3 + 1.5 * iqr)), 
-        df[col_res].median()
+        mediana_geral
     )
     
     # Cálculos Móveis
@@ -37,20 +39,40 @@ def processar_dados_robustos(df_raw, col_res, col_data, col_hora, n_janela):
     
     return df
 
-def aplicar_decimation(df, limite=50000):
-    """Reduz a quantidade de pontos para o gráfico se os dados forem massivos."""
-    if len(df) > limite:
-        passo = len(df) // 5000 # Reduz para ~5000 pontos representativos
-        return df.iloc[::passo]
-    return df
+def criar_grafico_webgl(df, y_col, lsc_col, lic_col, titulo, y_label):
+    """Gera gráficos usando WebGL para suportar milhares de pontos sem travar."""
+    fig = go.Figure()
+    
+    # Linha Principal (Mediana ou DP)
+    fig.add_trace(go.Scattergl(x=df['timestamp'], y=df[y_col], name=y_label,
+                               line=dict(color='#1f77b4', width=2)))
+    
+    # Limite Superior
+    fig.add_trace(go.Scattergl(x=df['timestamp'], y=df[lsc_col], name='LSC',
+                               line=dict(color='red', width=1, dash='dash')))
+    
+    # Limite Inferior (se existir)
+    if lic_col in df.columns:
+        fig.add_trace(go.Scattergl(x=df['timestamp'], y=df[lic_col], name='LIC',
+                                   line=dict(color='red', width=1, dash='dash')))
+    
+    fig.update_layout(
+        title=titulo,
+        xaxis_title="Tempo",
+        yaxis_title="Valor",
+        hovermode="x unified",
+        template="plotly_white",
+        height=450,
+        margin=dict(l=20, r=20, t=40, b=20)
+    )
+    return fig
 
 # --- INTERFACE ---
 
-st.title("📊 Monitoramento de Medida Móvel - V2")
+st.title("📊 Medida Móvel Analítica - Performance WebGL")
 
-# Sidebar: Especificações Analíticas
 with st.sidebar:
-    st.header("⚙️ Configurações")
+    st.header("⚙️ Especificações")
     cvi = st.number_input("CVi (%)", value=2.0, step=0.1) / 100
     cvg = st.number_input("CVg (%)", value=5.0, step=0.1) / 100
     cva = st.number_input("Pior Cenário CVa (%)", value=3.0, step=0.1) / 100
@@ -64,7 +86,7 @@ with st.sidebar:
     op6 = 0.375 * np.sqrt(cvi**2 + cvg**2) * 100
     rcv = 2.77 * np.sqrt(cva**2 + cvi**2)
 
-    meta_escolhida = st.selectbox("Selecione a Meta (Mediana):", [
+    meta_escolhida = st.selectbox("Meta para Mediana:", [
         f"Opção 1 - EA Desejável ({op1:.2f}%)",
         f"Opção 2 - EA Mínima ({op2:.2f}%)",
         "Opção 3 - Custom (Erro Aleatório)",
@@ -79,19 +101,16 @@ with st.sidebar:
         valor_manual = st.number_input("Valor Customizado (%)", value=10.0) / 100
 
     n_janela = st.number_input("N (Janela Móvel)", value=10, min_value=2)
-    st.caption("Probabilidade de Confiança: 99,999%")
 
-# Carregamento do Arquivo
-file = st.file_uploader("Arraste sua planilha (CSV ou Excel)", type=["csv", "xlsx"])
+file = st.file_uploader("Suba sua planilha (CSV ou Excel)", type=["csv", "xlsx"])
 
 if file:
-    # Leitura otimizada
     if file.name.endswith('.csv'):
         df_input = pd.read_csv(file, sep=None, engine='python')
     else:
         df_input = pd.read_excel(file)
     
-    st.info(f"Registros encontrados: {len(df_input)}")
+    st.info(f"Total de registros: {len(df_input)}")
     
     cols = df_input.columns.tolist()
     c1, c2, c3 = st.columns(3)
@@ -99,20 +118,18 @@ if file:
     with c2: col_h = st.selectbox("Coluna Hora", cols)
     with c3: col_r = st.selectbox("Coluna Resultado", cols)
 
-    if st.button("🚀 Gerar Análise de Performance"):
-        with st.spinner("Processando dados e aplicando algoritmos robustos..."):
-            # Processamento com Cache
+    if st.button("🚀 Processar com Alta Performance"):
+        with st.spinner("Executando cálculos robustos..."):
             df_final = processar_dados_robustos(df_input, col_r, col_d, col_h, n_janela)
             
-            # Cálculo de Limites
+            # Definição de Metas
             mediana_alvo = df_final['res_limpo'].median()
             
-            # Lógica de definição do limite conforme escolha do usuário
             if "Opção 1" in meta_escolhida: perc = op1/100
             elif "Opção 2" in meta_escolhida: perc = op2/100
             elif "Opção 5" in meta_escolhida: perc = op5/100
             elif "Opção 6" in meta_escolhida: perc = op6/100
-            elif "Opção 4" in meta_escolhida: perc = rcv # Tratado como absoluto
+            elif "Opção 4" in meta_escolhida: perc = rcv 
             else: perc = valor_manual
 
             if "Opção 4" in meta_escolhida:
@@ -122,27 +139,29 @@ if file:
                 df_final['LSC'] = mediana_alvo * (1 + perc)
                 df_final['LIC'] = mediana_alvo * (1 - perc)
 
-            # Limite DP Móvel (Sua fórmula t-Student)
+            # Limite DP (t-Student 99.999%)
             fator_t = stats.t.ppf(0.99999, n_janela-1)
             df_final['Limite_DP'] = fator_t * (0.75 * cva)
 
-            # --- RENDERIZAÇÃO OTIMIZADA ---
-            df_display = aplicar_decimation(df_final)
+            # --- EXIBIÇÃO DE GRÁFICOS ---
             
-            if len(df_final) > 50000:
-                st.warning(f"Decimation Ativado: Exibindo amostra de {len(df_display)} pontos para manter a fluidez.")
+            # Mediana Móvel
+            fig_mediana = criar_grafico_webgl(df_final, 'Mediana_Movel', 'LSC', 'LIC', 
+                                             "Tendência: Mediana Móvel", "Mediana")
+            st.plotly_chart(fig_mediana, use_container_width=True)
 
-            st.subheader("Gráfico de Mediana Móvel")
-            st.line_chart(df_display.set_index('timestamp')[['Mediana_Movel', 'LSC', 'LIC']])
+            # DP Móvel
+            fig_dp = criar_grafico_webgl(df_final, 'DP_Movel', 'Limite_DP', 'Limite_DP', 
+                                        "Precisão: Desvio Padrão Móvel", "DP")
+            # Ajuste para não mostrar LIC no gráfico de DP (que é sempre zero ou positivo)
+            fig_dp.data[2].visible = False 
+            st.plotly_chart(fig_dp, use_container_width=True)
 
-            st.subheader("Gráfico de Precisão (DP Móvel)")
-            st.line_chart(df_display.set_index('timestamp')[['DP_Movel', 'Limite_DP']])
-
-            # Filtro de Alertas (Exibe apenas as violações reais)
+            # --- ALERTAS ---
             alertas = df_final[(df_final['Mediana_Movel'] > df_final['LSC']) | 
                               (df_final['Mediana_Movel'] < df_final['LIC']) |
                               (df_final['DP_Movel'] > df_final['Limite_DP'])]
             
             if not alertas.empty:
-                st.error(f"🚨 {len(alertas)} violações de limite detectadas!")
-                st.dataframe(alertas[[col_d, col_h, col_r, 'Mediana_Movel', 'DP_Movel']].head(100))
+                st.error(f"🚨 {len(alertas)} violações detectadas!")
+                st.dataframe(alertas[[col_d, col_h, col_r, 'Mediana_Movel', 'DP_Movel']].head(500))
