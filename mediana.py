@@ -74,7 +74,7 @@ def processar_estatistica_completa(df_raw, col_res, col_data, col_hora, n_janela
 
 # --- BLOCO 3: INTERFACE E GRÁFICOS ---
 
-st.title("📊 Ferramenta Medida Móvel - Qualidade Avançada")
+st.title("📊 Ferramenta Mediana Móvel")
 st.markdown("Monitoramento baseado em **ISO 13528** (Limites Estatísticos) e **Variação Biológica** (Limites Clínicos).")
 
 with st.sidebar:
