@@ -8,8 +8,7 @@ st.set_page_config(page_title="Medida Móvel - Lab Quality", layout="wide")
 
 st.title("📊 Monitoramento de Medida Móvel Analítica")
 st.markdown("""
-Esta aplicação transpõe a lógica do formulário **FORM.39.POA.GQQ.05** para a nuvem, 
-focando em Mediana Móvel e DP Móvel Robusto.
+Esta aplicação transpõe foca em Mediana Móvel e DP Móvel Robusto.
 """)
 
 # --- SIDEBAR: ESPECIFICAÇÕES DA QUALIDADE ANALÍTICA ---
